@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; }
+        canvas {
+            display: block;
+            width: 600px;
+            height: 500px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="render-canvas"></canvas>
+
+<!-- UMD scripts -->
+<script src="https://flyover.github.io/imgui-js/dist/imgui.umd.js"></script>
+<script src="https://flyover.github.io/imgui-js/dist/imgui_impl.umd.js"></script>
+
+<script>
+    async function loadTexture(gl, url) {
+    return new Promise((resolve) => {
+        const image = new Image();
+        image.src = url;
+
+        image.onload = () => {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+            gl.texImage2D(
+                gl.TEXTURE_2D,
+                0,
+                gl.RGBA,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                image
+            );
+
+            resolve(texture);
+        };
+    });
+}
+(async function () {
+    const canvas = document.getElementById("render-canvas");
+    const gl = canvas.getContext("webgl");
+    // Init ImGui
+    await ImGui.default();
+    ImGui.CreateContext();
+    ImGui.StyleColorsDark();
+
+    await ImGui_Impl.Init(canvas);
+
+    const folders = {
+        "Folder A": ["file1.txt", "file2.txt", "file3.txt"],
+        "Folder B": ["file3.txt"]
+    };
+    const myTexture = await loadTexture(gl, "/Users/ricky/Documents/code/javascript/codeEdit/Screenshot1.png");
+
+    function loop(time) {
+        ImGui_Impl.NewFrame(time);
+        ImGui.NewFrame();
+
+        // Window
+        ImGui.Begin("New Window");
+        ImGui.Text("Hello, World!");
+        ImGui.End();
+
+        // Child
+        ImGui.Begin("Child1");
+        if (ImGui.TreeNode("Basic")) {
+            ImGui.Text("Inside child window");
+            ImGui.Button("Button in child");
+            ImGui.TreePop();
+        }
+        ImGui.End();
+
+        ImGui.Begin("Image Window");
+        ImGui.Text("Image below:");
+        // width, height
+        ImGui.Image(myTexture, new ImGui.ImVec2(256, 256));
+        ImGui.End();
+
+        // Drag Tree
+        ImGui.Begin("Drag Tree Example");
+
+        const folderKeys = Object.keys(folders);
+
+        for (let folderIndex = 0; folderIndex < folderKeys.length; folderIndex++) {
+            const folder = folderKeys[folderIndex];
+
+            if (ImGui.TreeNode(folder)) {
+                var isMoving = {y: null, x: null, z: null}
+                folders[folder].forEach((file, fileIndex) => {
+                    ImGui.Selectable(file);
+
+                    if (ImGui.BeginDragDropSource()) {
+                        const payload = new Int32Array([fileIndex, folderIndex]);
+                        ImGui.SetDragDropPayload("FILE_ITEM", payload);
+                        
+                        ImGui.Text(file);
+                        ImGui.EndDragDropSource();
+                    }
+                    if (ImGui.BeginDragDropTarget()) {
+                        const payload = ImGui.AcceptDragDropPayload("FILE_ITEM");
+                        if (payload) {
+                            const fileIndexNew = payload.Data[0];
+                            const fromFolderIndexNew = payload.Data[1];
+                            isMoving = {x: fileIndexNew, y: fromFolderIndexNew, z: fileIndex}
+                        }
+                        ImGui.EndDragDropTarget();
+                    }
+                });
+                if(isMoving.y != null){
+                    const fromFolder = folderKeys[isMoving.y];
+                    const item = folders[fromFolder][isMoving.x];
+    
+                    folders[fromFolder].splice(isMoving.x, 1);
+                    folders[folder].splice(isMoving.z, 0, item);
+                }
+
+                // Drop target
+
+                ImGui.TreePop();
+            }
+        }
+
+        ImGui.End();
+
+        ImGui.EndFrame();
+        ImGui.Render();
+        ImGui_Impl.RenderDrawData(ImGui.GetDrawData());
+
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
